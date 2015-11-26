@@ -26,11 +26,11 @@ describe LogStash::Filters::RailsRoutes do
     File.exists?(@route_spec_filename) && File.unlink(@route_spec_filename)
   end
 
-  before(:each) do
-    subject.register()
-  end
-
   describe 'routes spec content' do
+    before(:each) do
+      subject.register()
+    end
+
     context 'when prefix exists in routes spec' do
       let(:attrs) { Hash['verb', 'GET', 'uri', '/resources/1'] }
       let(:routes_spec_content) do <<-SPEC
@@ -55,6 +55,30 @@ describe LogStash::Filters::RailsRoutes do
         subject.filter(event)
         expect(event['controller#action']).to eq 'resources#show'
       end
+    end
+  end
+
+  describe 'api_prefix' do
+    let(:api_prefix) { 'https://api.domain.com/' }
+    let(:attrs) do
+      {
+        'verb' => 'GET',
+        'uri' => "#{api_prefix}resources/1"
+      }
+    end
+    let(:routes_spec_content) do <<-SPEC
+      resources GET /resources/:id(.:format) resources#show
+    SPEC
+    end
+
+    before(:each) do
+      config['api_prefix'] = api_prefix
+      subject.register()
+    end
+
+    it 'can match the part after api prefix' do
+      subject.filter(event)
+      expect(event['controller#action']).to eq 'resources#show'
     end
   end
 end
