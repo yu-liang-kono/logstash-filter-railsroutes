@@ -77,17 +77,8 @@ class LogStash::Filters::RailsRoutes < LogStash::Filters::Base
       return
     end
 
-    if @api_prefix != ''
-      if uri.start_with? @api_prefix
-        uri = uri[@api_prefix.size..-1]
-        uri = '/' + uri unless uri.start_with? '/'
-      else
-        @logger.warn("'#{uri}' does not start with '#{@api_prefix}'")
-        return
-      end
-    end
-
-    verb.upcase!
+    verb = verb.upcase
+    uri = normalize_uri(uri)
     match(verb, uri, target)
 
     unless target['controller#action']
@@ -97,6 +88,22 @@ class LogStash::Filters::RailsRoutes < LogStash::Filters::Base
     # filter_matched should go in the last line of our successful code
     filter_matched(event)
   end # def filter
+
+  private
+  def normalize_uri(uri)
+    if @api_prefix != ''
+      if uri.start_with? @api_prefix
+        uri = uri[@api_prefix.size..-1]
+        uri = '/' + uri unless uri.start_with? '/'
+      else
+        @logger.warn("'#{uri}' does not start with '#{@api_prefix}'")
+        return uri
+      end
+    end
+
+    uri = uri[0...-1] if uri.end_with? '/'
+    uri.gsub(/\/\//, '/')
+  end
 
   private
   def match(verb, uri, target)
