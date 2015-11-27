@@ -41,6 +41,8 @@ describe LogStash::Filters::RailsRoutes do
       it 'can match' do
         subject.filter(event)
         expect(event['controller#action']).to eq 'resources#show'
+        expect(event['id']).to eq '1'
+        expect(event['format']).to be_nil
       end
     end
 
@@ -54,6 +56,8 @@ describe LogStash::Filters::RailsRoutes do
       it 'can match' do
         subject.filter(event)
         expect(event['controller#action']).to eq 'resources#show'
+        expect(event['id']).to eq '1'
+        expect(event['format']).to be_nil
       end
     end
   end
@@ -79,6 +83,31 @@ describe LogStash::Filters::RailsRoutes do
     it 'can match the part after api prefix' do
       subject.filter(event)
       expect(event['controller#action']).to eq 'resources#show'
+      expect(event['id']).to eq '1'
+      expect(event['format']).to be_nil
+    end
+  end
+
+  describe 'target' do
+    let(:attrs) do
+      {'verb' => 'GET', 'uri' => "/resources/1"}
+    end
+    let(:routes_spec_content) do <<-SPEC
+      resources GET /resources/:id(.:format) resources#show
+    SPEC
+    end
+
+    before(:each) do
+      config['target'] = 'target'
+      subject.register()
+    end
+
+    it 'can match the part after api prefix' do
+      subject.filter(event)
+      obj = event['target']
+      expect(obj['controller#action']).to eq 'resources#show'
+      expect(obj['id']).to eq '1'
+      expect(obj['format']).to be_nil
     end
   end
 end
