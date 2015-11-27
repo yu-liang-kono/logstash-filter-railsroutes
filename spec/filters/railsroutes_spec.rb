@@ -110,4 +110,38 @@ describe LogStash::Filters::RailsRoutes do
       expect(obj['format']).to be_nil
     end
   end
+
+  describe 'normalize uri' do
+    let(:routes_spec_content) do <<-SPEC
+      resources POST /resources(.:format)     resources#create
+                GET  /resources/:id(.:format) resources#show
+    SPEC
+    end
+
+    before(:each) do
+      subject.register()
+    end
+
+    context 'when uri ends with a slash' do
+      let(:attrs) do
+        {'verb' => 'POST', 'uri' => '/resources/'}
+      end
+
+      it 'can match' do
+        subject.filter(event)
+        expect(event['controller#action']).to eq 'resources#create'
+      end
+    end
+
+    context 'when uri has double slash' do
+      let(:attrs) do
+        {'verb' => 'GET', 'uri' => '//resources//1'}
+      end
+
+      it 'can match' do
+        subject.filter(event)
+        expect(event['controller#action']).to eq 'resources#show'
+      end
+    end
+  end
 end
