@@ -1,82 +1,61 @@
 # Logstash Plugin
 
-[![Build
-Status](http://build-eu-00.elastic.co/view/LS%20Plugins/view/LS%20Filters/job/logstash-plugin-filter-example-unit/badge/icon)](http://build-eu-00.elastic.co/view/LS%20Plugins/view/LS%20Filters/job/logstash-plugin-filter-example-unit/)
-
 This is a plugin for [Logstash](https://github.com/elastic/logstash).
 
 It is fully free and fully open source. The license is Apache 2.0, meaning you are pretty much free to use it however you want in whatever way.
 
 ## Documentation
 
-Logstash provides infrastructure to automatically generate documentation for this plugin. We use the asciidoc format to write documentation so any comments in the source code will be first converted into asciidoc and then into html. All plugin documentation are placed under one [central location](http://www.elastic.co/guide/en/logstash/current/).
+The aim of this filter is to recognize a URI in rails `controller#action` form.
 
-- For formatting code or config example, you can use the asciidoc `[source,ruby]` directive
-- For more asciidoc formatting tips, see the excellent reference here https://github.com/elastic/docs#asciidoc-guide
+### Prerequisite
+- rails routes table.
+Make use of rails rake `routes`, we can gather all path patterns in a rails application.
+`bundle exec rake routes | tail -n +2 > routes_spec`
 
-## Need Help?
-
-Need help? Try #logstash on freenode IRC or the https://discuss.elastic.co/c/logstash discussion forum.
-
-## Developing
-
-### 1. Plugin Developement and Testing
-
-#### Code
-- To get started, you'll need JRuby with the Bundler gem installed.
-
-- Create a new plugin or clone and existing from the GitHub [logstash-plugins](https://github.com/logstash-plugins) organization. We also provide [example plugins](https://github.com/logstash-plugins?query=example).
-
-- Install dependencies
-```sh
-bundle install
+The result may look like
+```
+users POST /users(.:format)     users#create
+      GET  /users(.:format)     users#index
+      GET  /users/:id(.:format) users#show
+      ...
 ```
 
-#### Test
-
-- Update your dependencies
-
-```sh
-bundle install
+### Example #1
+- with these given logs:
+```
+2015-11-18T09:45:58.797031Z "GET https://some.domain.com/api/users/1"
 ```
 
-- Run tests
-
-```sh
-bundle exec rspec
+- you can use `grok` to recognize http verb and uri separately and use `railsroutes` to figure out the rails controller and action, even the parameters inside the uri can be extracted as well.
+```
+filter {
+  grok {
+    match => ['message', '%{TIMESTAMP_ISO8601:timestamp} "%{WORD:http_verb} %{URI:url}"']
+  }
+  railsroutes {
+    verb_source => 'http_verb'
+    uri_source => 'url'
+    routes_spec => '/somewhere/to/your/rails/routes/table'
+    api_prefix => 'https://some.domain.com/api'
+    target => 'rails'
+  }
+}
 ```
 
-### 2. Running your unpublished Plugin in Logstash
-
-#### 2.1 Run in a local Logstash clone
-
-- Edit Logstash `Gemfile` and add the local plugin path, for example:
-```ruby
-gem "logstash-filter-awesome", :path => "/your/local/logstash-filter-awesome"
+- the final event then looks like:
+```json
+{
+    "message": "2015-11-18T09:45:58.797031Z \"GET https://some.domain.com/api/users/1\"",
+    "http_verb": "GET",
+    "url": "https://some.domain.com/api/users/1",
+    "rails": {
+        "controller#action": "users#show",
+        "id": "1",
+        "format": null
+    }
+}
 ```
-- Install plugin
-```sh
-bin/plugin install --no-verify
-```
-- Run Logstash with your plugin
-```sh
-bin/logstash -e 'filter {awesome {}}'
-```
-At this point any modifications to the plugin code will be applied to this local Logstash setup. After modifying the plugin, simply rerun Logstash.
-
-#### 2.2 Run in an installed Logstash
-
-You can use the same **2.1** method to run your plugin in an installed Logstash by editing its `Gemfile` and pointing the `:path` to your local plugin development directory or you can build the gem and install it using:
-
-- Build your plugin gem
-```sh
-gem build logstash-filter-awesome.gemspec
-```
-- Install the plugin from the Logstash home
-```sh
-bin/plugin install /your/local/plugin/logstash-filter-awesome.gem
-```
-- Start Logstash and proceed to test the plugin
 
 ## Contributing
 
