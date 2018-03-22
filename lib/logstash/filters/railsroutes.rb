@@ -1,19 +1,21 @@
 # encoding: utf-8
-require "logstash/filters/base"
-require "logstash/namespace"
+# frozen_string_literal: true
+
+require 'logstash/filters/base'
+require 'logstash/namespace'
 require 'journey'
 
 class LogStash::Filters::RailsRoutes < LogStash::Filters::Base
-  config_name "railsroutes"
+  config_name 'railsroutes'
 
-  config :routes_spec, :validate => :string, :required => true
-  config :verb_source, :validate => :string, :required => true
-  config :uri_source, :validate => :string, :required => true
-  config :api_prefix, :validate => :string, :default => ''
-  config :target, :validate => :string
+  config :routes_spec, validate: :string, required: true
+  config :verb_source, validate: :string, required: true
+  config :uri_source, validate: :string, required: true
+  config :api_prefix, validate: :string, default: ''
+  config :target, validate: :string
 
   class RoutePattern
-    ParseError = Class.new StandardError
+    ParseError = Class.new(StandardError)
 
     attr_reader :controller_action
 
@@ -23,21 +25,21 @@ class LogStash::Filters::RailsRoutes < LogStash::Filters::Base
       case sub_strings.size
       when 3
         verb, pattern, controller_action = sub_strings
-        self.new(verb, pattern, controller_action)
+        new(verb, pattern, controller_action)
       when 4
         _, verb, pattern, controller_action = sub_strings
-        self.new(verb, pattern, controller_action)
+        new(verb, pattern, controller_action)
       else
-        fail ParseError, "Cannot parse route spec: #{line}"
+        raise ParseError, "Cannot parse route spec: #{line}"
       end
     end
 
     def initialize(verb, path, controller_action)
-      if verb.include? '|'
-        @verbs = verb.split('|').map(&:upcase)
-      else
-        @verbs = [verb.upcase]
-      end
+      @verbs = if verb.include? '|'
+                 verb.split('|').map(&:upcase)
+               else
+                 [verb.upcase]
+               end
 
       @path_pattern = Journey::Path::Pattern.new(path)
       @controller_action = controller_action
@@ -50,6 +52,7 @@ class LogStash::Filters::RailsRoutes < LogStash::Filters::Base
   end
 
   public
+
   def register
     File.open(@routes_spec) do |f|
       @patterns = f.each_line.map do |line|
@@ -66,11 +69,11 @@ class LogStash::Filters::RailsRoutes < LogStash::Filters::Base
   end # def register
 
   public
+
   def filter(event)
-    verb = event[@verb_source]
-    uri = event[@uri_source]
-    target = @target ? (event[@target] ||= {}) : event
-    target['controller#action'] = nil
+    verb = event.get(@verb_source)
+    uri = event.get(@uri_source)
+    target = {'controller#action' => nil}
 
     if verb.nil? || uri.nil?
       @logger.error("Incomplete source: verb = '#{verb}', uri = '#{uri}'")
@@ -85,11 +88,18 @@ class LogStash::Filters::RailsRoutes < LogStash::Filters::Base
       @logger.warn("Unrecognizable: #{verb} #{uri}")
     end
 
+    if @target
+      event.set(@target, target)
+    else
+      target.each { |key, val| event.set(key, val) }
+    end
+
     # filter_matched should go in the last line of our successful code
     filter_matched(event)
   end # def filter
 
   private
+
   def normalize_uri(uri)
     if @api_prefix != ''
       if uri.start_with? @api_prefix
@@ -106,6 +116,7 @@ class LogStash::Filters::RailsRoutes < LogStash::Filters::Base
   end
 
   private
+
   def match(verb, uri, target)
     @patterns.each do |pattern|
       next unless result = pattern.match(verb, uri)
